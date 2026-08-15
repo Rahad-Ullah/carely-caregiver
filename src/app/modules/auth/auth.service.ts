@@ -165,6 +165,7 @@ const logintoDB = async (payload: LoginPayload) => {
     refreshToken,
     user: {
       id: user._id,
+      name: user.name,
       email: user.email,
       role: user.role,
       verificationStatus: user.verificationStatus,
@@ -299,6 +300,7 @@ const userVerify = async (payload: VerifyUserPayload) => {
     refreshToken,
     user: {
       id: user._id,
+      name: user.name,
       email: user.email,
       role: user.role,
       verificationStatus: user.verificationStatus,
