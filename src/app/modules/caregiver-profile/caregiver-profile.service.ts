@@ -37,7 +37,7 @@ const setupProfile = async (payload: ISetupProfilePayload, userId: string) => {
 
   const [profile] = await Promise.all([
     CaregiverProfile.create(data),
-    User.findByIdAndUpdate(userId, {intakeCompleted: true})
+    User.findByIdAndUpdate(userId, { intakeCompleted: true })
   ])
 
   return profile;
@@ -59,12 +59,6 @@ const getOwnProfile = async (userId: string) => {
 };
 
 const updateOwnProfile = async (userId: string, payload: IUpdateProfilePayload) => {
-  const profile = await CaregiverProfile.findOne({ user: new Types.ObjectId(userId) });
-
-  if (!profile) {
-    throw new ApiError(StatusCodes.NOT_FOUND, 'Caregiver profile not found');
-  }
-
   const updateData: Record<string, unknown> = { ...payload };
 
   if (payload.specialties?.length) {
@@ -74,7 +68,7 @@ const updateOwnProfile = async (userId: string, payload: IUpdateProfilePayload) 
   return await CaregiverProfile.findOneAndUpdate(
     { user: new Types.ObjectId(userId) },
     updateData,
-    { new: true, runValidators: true }
+    { upsert: true, new: true, runValidators: true }
   )
     .populate('user', USER_FIELDS)
     .populate('specialties', SPECIALTY_FIELDS);
@@ -174,7 +168,7 @@ const adminGetAllCaregivers = async (query: Record<string, unknown>) => {
   const caregiverQuery = new QueryBuilder(
     CaregiverProfile.find({})
       .populate('user', 'name profileImage').lean(),
-      
+
     query
   )
     .filter()
@@ -188,10 +182,10 @@ const adminGetAllCaregivers = async (query: Record<string, unknown>) => {
 
   const meta = await caregiverQuery.countTotal();
 
-const formattedData: any[] = data.map((profile: any) => ({
+  const formattedData: any[] = data.map((profile: any) => ({
     _id: profile._id,
     user: profile.user,
-    appliedOn: profile.createdAt, 
+    appliedOn: profile.createdAt,
   }));
 
   return {
@@ -211,14 +205,14 @@ const adminVerifyCaregiver = async (id: string, payload: IAdminVerifyPayload) =>
 
   const [updatedProfile] = await Promise.all([
     CaregiverProfile.findByIdAndUpdate(id, {
-        verificationStatus: payload.status,
-        isVerified: isApproved,
-        isAvailableForBooking: isApproved,
-        ...(!isApproved && {verifiedBadge: false}),
-        
-    }, {new: true} ).populate('user', USER_FIELDS),
-    User.findByIdAndUpdate( profile.user, {
-        verificationStatus: payload.status
+      verificationStatus: payload.status,
+      isVerified: isApproved,
+      isAvailableForBooking: isApproved,
+      ...(!isApproved && { verifiedBadge: false }),
+
+    }, { new: true }).populate('user', USER_FIELDS),
+    User.findByIdAndUpdate(profile.user, {
+      verificationStatus: payload.status
     })
   ])
 
