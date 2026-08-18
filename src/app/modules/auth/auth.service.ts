@@ -1,6 +1,6 @@
 import bcrypt from "bcrypt";
 import { StatusCodes } from "http-status-codes";
-import { Secret } from "jsonwebtoken";
+import { JwtPayload, Secret } from "jsonwebtoken";
 
 import config from "../../../config";
 import ApiError from "../../../errors/ApiErrors";
@@ -145,7 +145,7 @@ const logintoDB = async (payload: LoginPayload) => {
   if (user.status === STATUS.INACTIVE) {
     throw new ApiError(StatusCodes.FORBIDDEN, "Your account is inactive");
   }
-
+  console.log(password)
   const isPasswordMatched = await bcrypt.compare(password, user.password);
   if (!isPasswordMatched) {
     throw new ApiError(StatusCodes.UNAUTHORIZED, "Incorrect password");
@@ -255,10 +255,6 @@ const userVerify = async (payload: VerifyUserPayload) => {
     );
   }
 
-  if (user.verified) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, "Email is already verified");
-  }
-
   const savedOtp = user.authentication?.oneTimeCode;
   const expiredAt = user.authentication?.expiredAt;
 
@@ -280,80 +276,100 @@ const userVerify = async (payload: VerifyUserPayload) => {
     throw new ApiError(StatusCodes.BAD_REQUEST, "Incorrect OTP");
   }
 
-  await User.updateOne(
-    { _id: user._id },
-    {
-      $set: { verified: true },
-      $unset: {
-        "authentication.oneTimeCode": 1,
-        "authentication.expiredAt": 1,
-        "authentication.isResetPassword": 1,
+  if (user.verified) {
+    // reset password
+    await User.updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          "authentication.isResetPassword": true,
+        },
+        $unset: {
+          "authentication.oneTimeCode": 1,
+          "authentication.expiredAt": 1,
+        },
       },
-    },
-  );
+    );
 
-  // Return tokens — frontend routes based on role + intakeCompleted
-  const tokenPayload = { id: user._id, email: user.email, role: user.role };
-  const { accessToken, refreshToken } = generateTokens(tokenPayload);
+    // Return tokens — frontend routes based on role + intakeCompleted
+    const tokenPayload = { id: user._id, email: user.email, role: user.role };
+    const resetToken = jwtHelper.createToken(
+      tokenPayload,
+      config.jwt.jwt_secret as Secret,
+      '5m', // 5 minutes
+    );
+    return { resetToken }
+  } else {
+    // verify email and return tokens
+    await User.updateOne(
+      { _id: user._id },
+      {
+        $set: { verified: true },
+        $unset: {
+          "authentication.oneTimeCode": 1,
+          "authentication.expiredAt": 1,
+          "authentication.isResetPassword": 1,
+        },
+      },
+    );
 
-  return {
-    accessToken,
-    refreshToken,
-    user: {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      phone: user.phone,
-      verificationStatus: user.verificationStatus,
-      intakeCompleted: user.intakeCompleted,
-    },
-  };
+    // Return tokens — frontend routes based on role + intakeCompleted
+    const tokenPayload = { id: user._id, email: user.email, role: user.role };
+    const { accessToken, refreshToken } = generateTokens(tokenPayload);
+
+    return {
+      accessToken,
+      refreshToken,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        phone: user.phone,
+        verificationStatus: user.verificationStatus,
+        intakeCompleted: user.intakeCompleted,
+      },
+    };
+  }
 };
 
 // RESET PASSWORD (OTP-based)
-const resetPasswordWithOtp = async (payload: ResetPasswordWithOtpPayload) => {
-  const { email, otp, password } = payload;
+const resetPassword = async (payload: ResetPasswordWithOtpPayload, user: JwtPayload) => {
+  const { newPassword, confirmPassword } = payload;
 
-  const user = await User.findOne({ email, isDeleted: false }).select(
+  const existingUser = await User.findOne({ email: user.email, isDeleted: false }).select(
     "+authentication +password",
   );
-  if (!user) {
+  if (!existingUser) {
     throw new ApiError(
       StatusCodes.NOT_FOUND,
       "No account found with this email",
     );
   }
 
-  const savedOtp = user.authentication?.oneTimeCode;
-  const expiredAt = user.authentication?.expiredAt;
-  const isResetPassword = user.authentication?.isResetPassword;
+  const isResetPassword = existingUser.authentication?.isResetPassword;
 
-  if (!savedOtp || !expiredAt || !isResetPassword) {
+  if (!isResetPassword) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
-      "No valid password reset OTP found. Please request a new one.",
+      "Password reset session has expired. Please request a new one.",
     );
   }
 
-  if (new Date(expiredAt).getTime() < Date.now()) {
+  if (newPassword !== confirmPassword) {
     throw new ApiError(
       StatusCodes.BAD_REQUEST,
-      "OTP has expired. Please request a new one.",
+      "Passwords do not match",
     );
-  }
-
-  if (String(savedOtp) !== String(otp)) {
-    throw new ApiError(StatusCodes.BAD_REQUEST, "Incorrect OTP");
   }
 
   const hashedPassword = await bcrypt.hash(
-    password,
+    newPassword,
     Number(config.bcrypt_salt_rounds),
   );
 
   await User.updateOne(
-    { _id: user._id },
+    { _id: existingUser._id },
     {
       $set: { password: hashedPassword },
       $unset: {
@@ -373,5 +389,5 @@ export const AuthService = {
   refreshToken,
   sendOtp,
   userVerify,
-  resetPasswordWithOtp,
+  resetPassword,
 };

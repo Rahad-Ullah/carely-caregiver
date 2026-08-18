@@ -46,6 +46,7 @@ router.post(
 
 router.post(
   "/reset-password",
+  checkAuth(USER_ROLES.CLIENT, USER_ROLES.CAREGIVER, USER_ROLES.ADMIN),
   validateRequest(AuthValidation.createResetPasswordWithOtpZodSchema),
   AuthController.resetPassword,
 );

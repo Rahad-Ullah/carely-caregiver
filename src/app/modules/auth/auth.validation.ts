@@ -63,11 +63,10 @@ const createVerifyUserZodSchema = z.object({
 // Reset Password (OTP-based)
 const createResetPasswordWithOtpZodSchema = z.object({
   body: z.object({
-    email: z
-      .string({ message: "Email is required" })
-      .email("Invalid email address"),
-    otp: z.union([z.string(), z.number()]),
-    password: z
+    newPassword: z
+      .string({ message: "Password is required" })
+      .min(8, "Password must be at least 8 characters"),
+    confirmPassword: z
       .string({ message: "Password is required" })
       .min(8, "Password must be at least 8 characters"),
   }),

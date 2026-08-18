@@ -88,16 +88,13 @@ const userVerify = catchAsync(async (req: Request, res: Response) => {
     success: true,
     message: "Email verified successfully",
     statusCode: StatusCodes.OK,
-    data: {
-      accessToken: result!.accessToken,
-      user: result!.user,
-    },
+    data: result
   });
 });
 
 //  Reset Password
 const resetPassword = catchAsync(async (req: Request, res: Response) => {
-  await AuthService.resetPasswordWithOtp(req.body);
+  await AuthService.resetPassword(req.body, req.user);
 
   sendResponse(res, {
     success: true,
