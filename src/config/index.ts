@@ -9,7 +9,7 @@ export default {
     port: process.env.PORT,
     database_url: process.env.DATABASE_URL,
     node_env: process.env.NODE_ENV,
-    client_url: process.env.CLIENT_URL,
+    client_url: process.env.CLIENT_URL || process.env.FRONTEND_URL || 'http://localhost:3000',
     bcrypt_salt_rounds: process.env.BCRYPT_SALT_ROUNDS,
     jwt: {
         jwt_secret: process.env.JWT_SECRET,

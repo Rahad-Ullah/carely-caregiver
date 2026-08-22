@@ -6,9 +6,10 @@ import stripe from '../../../config/stripe.config';
 import Booking from '../booking/booking.model';
 import { BOOKING_STATUS, PAYMENT_STATUS } from '../booking/booking.interface';
 import { emitBookingEvent } from '../../../socket/socketHandlers';
+import config from '../../../config';
 
-const createPaymentIntent = async (bookingId: string, clientId: string) => {
-  // Creates a Stripe PaymentIntent for the booking total and attaches the PI ID to the booking
+const createCheckoutSession = async (bookingId: string, clientId: string) => {
+  // Creates a Stripe Checkout Session for the booking total and attaches the Session ID to the booking
   const booking = await Booking.findById(bookingId);
   if (!booking) throw new ApiError(httpStatus.NOT_FOUND, 'Booking not found');
   if (booking.client.toString() !== clientId) {
@@ -21,31 +22,40 @@ const createPaymentIntent = async (bookingId: string, clientId: string) => {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Booking hold has expired');
   }
 
-const client = await User.findById(clientId).select('email name')
+  const client = await User.findById(clientId).select('email name');
 
-
-  const paymentIntent = await stripe.paymentIntents.create({
-    amount: Math.round(booking.totalAmount * 100),
-    currency: 'usd',
-    automatic_payment_methods: {
-      enabled: true,
-      allow_redirects: 'never'
-    },
-    receipt_email: client?.email || undefined,
+  const session = await stripe.checkout.sessions.create({
+    payment_method_types: ['card'],
+    line_items: [
+      {
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: 'Booking Payment',
+            description: `Payment for booking ID: ${booking._id.toString()}`,
+          },
+          unit_amount: Math.round(booking.totalAmount * 100),
+        },
+        quantity: 1,
+      },
+    ],
+    mode: 'payment',
+    success_url: config.stripe.success_url || `${config.client_url}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: config.stripe.cancel_url || `${config.client_url}/payment/cancel`,
+    customer_email: client?.email || undefined,
     metadata: {
       bookingId: booking._id.toString(),
       clientId,
     },
   });
 
-  booking.paymentIntentId = paymentIntent.id;
+  booking.paymentIntentId = session.id;
   await booking.save();
 
   return {
-    clientSecret: paymentIntent.client_secret,
-    paymentIntentId: paymentIntent.id,
+    checkoutUrl: session.url,
+    sessionId: session.id,
     amount: booking.totalAmount,
-
   };
 };
 
@@ -64,12 +74,18 @@ const handleWebhook = async (rawBody: Buffer, signature: string) => {
   }
 
   switch (event.type) {
-    case 'payment_intent.succeeded': {
-      const pi = event.data.object as Stripe.PaymentIntent;
-      const booking = await Booking.findOne({ paymentIntentId: pi.id });
+    case 'checkout.session.completed': {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const bookingId = session.metadata?.bookingId;
+      if (!bookingId) break;
+
+      const booking = await Booking.findById(bookingId);
       if (!booking) break;
 
       booking.paymentStatus = PAYMENT_STATUS.PAID;
+      if (session.payment_intent) {
+        booking.paymentIntentId = session.payment_intent as string;
+      }
       await booking.save();
 
       emitBookingEvent('booking:update', [booking.client.toString()], {
@@ -82,9 +98,42 @@ const handleWebhook = async (rawBody: Buffer, signature: string) => {
       break;
     }
 
+    case 'payment_intent.succeeded': {
+      const pi = event.data.object as Stripe.PaymentIntent;
+      const bookingId = pi.metadata?.bookingId;
+      const booking = await Booking.findOne({
+        $or: [
+          { paymentIntentId: pi.id },
+          { _id: bookingId }
+        ]
+      });
+      if (!booking) break;
+
+      if (booking.paymentStatus !== PAYMENT_STATUS.PAID) {
+        booking.paymentStatus = PAYMENT_STATUS.PAID;
+        booking.paymentIntentId = pi.id;
+        await booking.save();
+
+        emitBookingEvent('booking:update', [booking.client.toString()], {
+          bookingId: booking._id.toString(),
+          status: booking.status as BOOKING_STATUS,
+          paymentStatus: PAYMENT_STATUS.PAID,
+          message: 'Payment received. Awaiting caregiver confirmation.',
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      break;
+    }
+
     case 'payment_intent.payment_failed': {
       const pi = event.data.object as Stripe.PaymentIntent;
-      const booking = await Booking.findOne({ paymentIntentId: pi.id });
+      const bookingId = pi.metadata?.bookingId;
+      const booking = await Booking.findOne({
+        $or: [
+          { paymentIntentId: pi.id },
+          { _id: bookingId }
+        ]
+      });
       if (!booking) break;
 
       emitBookingEvent('booking:update', [booking.client.toString()], {
@@ -98,8 +147,12 @@ const handleWebhook = async (rawBody: Buffer, signature: string) => {
 
     case 'charge.refunded': {
       const charge = event.data.object as Stripe.Charge;
+      const bookingId = charge.metadata?.bookingId;
       const booking = await Booking.findOne({
-        paymentIntentId: charge.payment_intent as string,
+        $or: [
+          { paymentIntentId: charge.payment_intent as string },
+          { _id: bookingId }
+        ]
       });
       if (!booking) break;
 
@@ -125,4 +178,4 @@ const getPaymentStatus = async (bookingId: string, userId: string) => {
   return { paymentStatus: booking.paymentStatus };
 };
 
-export const StripeService = { createPaymentIntent, handleWebhook, getPaymentStatus };
+export const StripeService = { createCheckoutSession, handleWebhook, getPaymentStatus };

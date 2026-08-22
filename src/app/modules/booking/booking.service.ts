@@ -16,6 +16,7 @@ import { NOTIFICATION_TYPE } from '../../../enums/notification';
 import { BOOKING_STATUS, CANCELLED_BY, PAYMENT_STATUS, SHIFT_TYPE } from './booking.interface';
 import { emailHelper } from '../../../helpers/emailHelper';
 import { emailTemplate } from '../../../shared/emailTemplate';
+import { StripeService } from '../stripe/stripe.service';
 
 const SERVICE_FEE_RATE = 0.0893;
 const HOLD_DURATION_MS = 30 * 60 * 1000;
@@ -42,7 +43,7 @@ const getEmailPayload = async (bookingId: string) => {
     .populate('caregiver', 'name email')
     .populate('careRecipient', 'fullName')
     .populate('serviceCategory', 'name');
-    
+
   return {
     bookingId: b!._id.toString(),
     clientName: (b!.client as any).name,
@@ -232,6 +233,13 @@ const createBooking = async (
 
     await session.commitTransaction();
 
+    // create payment session
+    const payment = await StripeService.createCheckoutSession(
+      booking._id.toString(),
+      clientUser.id,
+    );
+
+
     await notifyAndEmit(
       caregiverId,
       'New Booking Request',
@@ -244,9 +252,11 @@ const createBooking = async (
     const payload = await getEmailPayload(booking._id.toString());
     emailHelper.sendEmail(emailTemplate.bookingRequest({ ...payload, specialInstructions: instructions ?? undefined }));
 
-    return booking;
+    return payment;
   } catch (err) {
-    await session.abortTransaction();
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     throw err;
   } finally {
     session.endSession();
