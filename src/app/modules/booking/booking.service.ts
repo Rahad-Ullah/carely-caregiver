@@ -279,7 +279,19 @@ const getMyBookings = async (clientUser: JwtPayload, query: Record<string, unkno
 
 const getCaregiverBookings = async (caregiverUser: JwtPayload, query: Record<string, unknown>) => {
   // Returns paginated incoming bookings for the authenticated caregiver
-  const baseQuery = Booking.find({ caregiver: new Types.ObjectId(caregiverUser.id) })
+  const filter: Record<string, unknown> = {
+    caregiver: new Types.ObjectId(caregiverUser.id),
+  };
+
+  if (query.date) {
+    const { startOfDay, endOfDay } = getUTCDayBounds(new Date(query.date as string));
+    filter.date = {
+      $gte: startOfDay,
+      $lte: endOfDay,
+    }
+  }
+
+  const baseQuery = Booking.find(filter)
     .populate('client', 'name profileImage')
     .populate('serviceCategory', 'name')
     .populate('careRecipient', 'fullName relationship');
