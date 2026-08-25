@@ -49,7 +49,7 @@ const searchCaregivers = catchAsync(async (req, res) => {
 });
 
 const getCaregiverById = catchAsync(async (req, res) => {
-  const result = await CaregiverProfileService.getCaregiverById(req.params.id as string);
+  const result = await CaregiverProfileService.getCaregiverById(req.params.id as string, req.query);
 
   sendResponse(res, {
     statusCode: StatusCodes.OK,

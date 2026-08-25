@@ -12,6 +12,7 @@ import {
   ISetupProfilePayload,
   IUpdateProfilePayload,
 } from './caregiver-profile.validation';
+import { AvailabilityService } from '../availability/availability.service';
 
 const USER_FIELDS = 'name email profileImage';
 const SPECIALTY_FIELDS = 'name icon';
@@ -151,17 +152,23 @@ const searchCaregivers = async (query: Record<string, unknown>) => {
   };
 };
 
-const getCaregiverById = async (id: string) => {
-  const profile = await CaregiverProfile.findById(id)
-    .populate('user', 'name profileImage')
-    .populate('specialties', 'name icon')
-    .select('bio skills experience hourlyRate city state verifiedBadge averageRating totalReviews');
+const getCaregiverById = async (id: string, query: { startDate?: string; endDate?: string }) => {
+  const startDate = (query.startDate ? new Date(query.startDate) : new Date()).toISOString().split('T')[0];
+  const endDate = (query.endDate ? new Date(query.endDate) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)).toISOString().split('T')[0];
+
+  const [profile, availability] = await Promise.all([
+    CaregiverProfile.findOne({ user: new Types.ObjectId(id) })
+      .populate('user', 'name profileImage')
+      .populate('specialties', 'name icon')
+      .select('bio skills experience hourlyRate city state verifiedBadge averageRating totalReviews'),
+    AvailabilityService.getCaregiverAvailability(id, { startDate, endDate })
+  ])
 
   if (!profile) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'Caregiver not found');
   }
 
-  return profile;
+  return { ...profile.toObject(), availability };
 };
 
 const adminGetAllCaregivers = async (query: Record<string, unknown>) => {
