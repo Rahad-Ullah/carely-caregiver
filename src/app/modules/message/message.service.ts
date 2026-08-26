@@ -99,6 +99,7 @@ const sendMessage = async (
 const getMessages = async (
   conversationId: string,
   myId:           string,
+  myRole:         string,
   query:          Record<string, unknown>,
 ) => {
   if (!Types.ObjectId.isValid(conversationId)) {
@@ -134,16 +135,8 @@ const getMessages = async (
     qb.countTotal(),
   ]);
 
-  // Mark messages as delivered when recipient fetches them
-  await Message.updateMany(
-    {
-      conversation: new Types.ObjectId(conversationId),
-      sender:       { $ne: new Types.ObjectId(myId) },
-      deliveredAt:  null,
-      isDeleted:    false,
-    },
-    { $set: { deliveredAt: new Date() } },
-  );
+  // Mark messages as seen
+  await markConversationSeen(conversationId, myId, myRole);
 
   return { messages, meta };
 };

@@ -49,6 +49,7 @@ const getMessages = catchAsync(async (req: Request, res: Response) => {
   const result = await MessageService.getMessages(
     req.params.conversationId as string,
     myId,
+    req.user.role as string,
     req.query as Record<string, unknown>,
   );
 
