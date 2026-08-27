@@ -1,5 +1,6 @@
 import { Server, Socket } from 'socket.io';
-import { getIO }          from './socket';
+import { getIO } from './socket';
+import { Message } from '../app/modules/message/message.model';
 
 // registerHandlers — called once per connection from socket.ts
 // Handles: messaging, typing, message status, notifications, booking events
@@ -29,13 +30,13 @@ export const registerHandlers = (io: Server, socket: Socket): void => {
 
   // Message delivered — client emits this when it receives message:new
   // Server notifies the original sender that their message was delivered
-  socket.on('message:delivered', ({
+  socket.on('message:delivered', async ({
     messageId,
     senderId,
     conversationId,
   }: {
-    messageId:      string;
-    senderId:       string;
+    messageId: string;
+    senderId: string;
     conversationId: string;
   }) => {
     // Notify sender — their message reached the recipient's device
@@ -44,24 +45,34 @@ export const registerHandlers = (io: Server, socket: Socket): void => {
       conversationId,
       deliveredAt: new Date().toISOString(),
     });
-    // DB update (deliveredAt) is handled by message.service when REST message is fetched
+
+    // db update (deliveredAt)
+    await Message.updateMany(
+      { conversation: conversationId, sender: senderId },
+      { $set: { deliveredAt: new Date() } }
+    );
   });
 
   // Message seen — client emits when user opens/reads a conversation
   // DB update happens via REST PATCH /messages/:conversationId/seen
   // Socket here just broadcasts the real-time seen status to the sender
-  socket.on('message:seen', ({
+  socket.on('message:seen', async ({
     conversationId,
     senderId,
   }: {
     conversationId: string;
-    senderId:       string;
+    senderId: string;
   }) => {
     io.to(senderId).emit('message:seen', {
       conversationId,
       seenBy: userId,
       seenAt: new Date().toISOString(),
     });
+    // db update
+    await Message.updateMany(
+      { conversation: conversationId, sender: senderId },
+      { $set: { isRead: true, readAt: new Date() } }
+    );
   });
 
   // Notification delivery ACK — client confirms it received the notification
@@ -76,15 +87,15 @@ export const registerHandlers = (io: Server, socket: Socket): void => {
 // Booking event emitter — import and call from booking.service.ts
 // Emits to personal userId rooms — safe if user is offline (silently skips)
 export interface IBookingSocketPayload {
-  bookingId:  string;
-  status:     string;
-  message:    string;
-  updatedAt:  string; // UTC ISO string
+  bookingId: string;
+  status: string;
+  message: string;
+  updatedAt: string; // UTC ISO string
   [key: string]: unknown;
 }
 
 export const emitBookingEvent = (
-  event:   string,
+  event: string,
   userIds: string[],
   payload: IBookingSocketPayload,
 ): void => {
@@ -99,13 +110,13 @@ export const emitBookingEvent = (
 // Message:new emitter — import and call from message.service.ts after creating a message
 // Emits to conversation room — all online participants in that conversation receive it
 export interface IMessageSocketPayload {
-  _id:            string;
+  _id: string;
   conversationId: string;
-  sender:         { _id: string; name: string; profileImage?: string };
-  content:        string;
-  contentType:    string;
-  attachment?:    string | null;
-  createdAt:      string; // UTC ISO string
+  sender: { _id: string; name: string; profileImage?: string };
+  content: string;
+  contentType: string;
+  attachment?: string | null;
+  createdAt: string; // UTC ISO string
 }
 
 export const emitNewMessage = (
@@ -115,6 +126,8 @@ export const emitNewMessage = (
   try {
     const io = getIO();
     io.to(conversationId).emit('message:new', payload);
+    // emit to participants personal room to update their conversation list
+    
   } catch {
     // never crash message service
   }

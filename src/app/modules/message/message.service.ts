@@ -1,23 +1,23 @@
-import { Types }             from 'mongoose';
-import { StatusCodes }       from 'http-status-codes';
-import ApiError              from '../../../errors/ApiErrors';
-import { Message }           from './message.model';
-import { Conversation }      from '../conversation/conversation.model';
+import { Types } from 'mongoose';
+import { StatusCodes } from 'http-status-codes';
+import ApiError from '../../../errors/ApiErrors';
+import { Message } from './message.model';
+import { Conversation } from '../conversation/conversation.model';
 import { QueryBuilder } from '../../buillder/queryBuilder';
-import { USER_ROLES }        from '../../../enums/user';
-import { emitNewMessage }    from '../../../socket/socketHandlers';
-import { getIO }             from '../../../socket/socket';
+import { USER_ROLES } from '../../../enums/user';
+import { emitNewMessage } from '../../../socket/socketHandlers';
+import { getIO } from '../../../socket/socket';
 
 const SENDER_FIELDS = 'name profileImage';
 
 // Creates a message, updates conversation counters, and emits real-time events
 const sendMessage = async (
   conversationId: string,
-  senderId:       string,
-  senderRole:     string,
-  content:        string,
-  contentType:    'TEXT' | 'IMAGE' | 'FILE' = 'TEXT',
-  attachment:     string | null = null,
+  senderId: string,
+  senderRole: string,
+  content: string,
+  contentType: 'TEXT' | 'IMAGE' | 'FILE' = 'TEXT',
+  attachment: string | null = null,
 ) => {
   if (!Types.ObjectId.isValid(conversationId)) {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid conversation ID');
@@ -41,8 +41,8 @@ const sendMessage = async (
 
   const message = await Message.create({
     conversation: new Types.ObjectId(conversationId),
-    sender:       new Types.ObjectId(senderId),
-    content:      content.trim(),
+    sender: new Types.ObjectId(senderId),
+    content: content.trim(),
     contentType,
     attachment,
   });
@@ -50,10 +50,10 @@ const sendMessage = async (
   const unreadIncrement =
     senderRole === USER_ROLES.CLIENT
       ? { $inc: { caregiverUnreadCount: 1 } }
-      : { $inc: { clientUnreadCount:   1 } };
+      : { $inc: { clientUnreadCount: 1 } };
 
   await Conversation.findByIdAndUpdate(conversationId, {
-    lastMessage:   message._id,
+    lastMessage: message._id,
     lastMessageAt: new Date(),
     ...unreadIncrement,
   });
@@ -67,20 +67,20 @@ const sendMessage = async (
   }
 
   emitNewMessage(conversationId, {
-    _id:            (populated._id as Types.ObjectId).toString(),
+    _id: (populated._id as Types.ObjectId).toString(),
     conversationId,
-    sender:         populated.sender as any,
-    content:        populated.content,
-    contentType:    populated.contentType,
-    attachment:     populated.attachment,
-    createdAt:      (populated as any).createdAt.toISOString(),
+    sender: populated.sender as any,
+    content: populated.content,
+    contentType: populated.contentType,
+    attachment: populated.attachment,
+    createdAt: (populated as any).createdAt.toISOString(),
   });
 
   try {
-    const io           = getIO();
-    const updatedConv  = await Conversation.findById(conversationId)
+    const io = getIO();
+    const updatedConv = await Conversation.findById(conversationId)
       .populate('participants', 'name email profileImage role')
-      .populate('lastMessage',  'content contentType attachment createdAt sender')
+      .populate('lastMessage', 'content contentType attachment createdAt sender')
       .lean();
 
     if (updatedConv) {
@@ -98,9 +98,9 @@ const sendMessage = async (
 // Returns paginated messages for a conversation and marks undelivered ones as delivered
 const getMessages = async (
   conversationId: string,
-  myId:           string,
-  myRole:         string,
-  query:          Record<string, unknown>,
+  myId: string,
+  myRole: string,
+  query: Record<string, unknown>,
 ) => {
   if (!Types.ObjectId.isValid(conversationId)) {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid conversation ID');
@@ -123,7 +123,7 @@ const getMessages = async (
   const qb = new QueryBuilder(
     Message.find({
       conversation: new Types.ObjectId(conversationId),
-      isDeleted:    false,
+      isDeleted: false,
     }).populate('sender', SENDER_FIELDS),
     cleanQuery,
   )
@@ -144,8 +144,8 @@ const getMessages = async (
 // Marks all unread messages in a conversation as read and resets the unread counter
 const markConversationSeen = async (
   conversationId: string,
-  myId:           string,
-  myRole:         string,
+  myId: string,
+  myRole: string,
 ) => {
   if (!Types.ObjectId.isValid(conversationId)) {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Invalid conversation ID');
@@ -168,9 +168,9 @@ const markConversationSeen = async (
   const { modifiedCount } = await Message.updateMany(
     {
       conversation: new Types.ObjectId(conversationId),
-      sender:       { $ne: new Types.ObjectId(myId) },
-      isRead:       false,
-      isDeleted:    false,
+      sender: { $ne: new Types.ObjectId(myId) },
+      isRead: false,
+      isDeleted: false,
     },
     { $set: { isRead: true, readAt: now } },
   );
@@ -204,8 +204,8 @@ const softDeleteMessage = async (messageId: string, myId: string) => {
     throw new ApiError(StatusCodes.BAD_REQUEST, 'Message already deleted');
   }
 
-  message.isDeleted  = true;
-  message.content    = 'This message was deleted';
+  message.isDeleted = true;
+  message.content = 'This message was deleted';
   message.attachment = null;
   await message.save();
 
