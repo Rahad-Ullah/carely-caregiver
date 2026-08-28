@@ -17,6 +17,7 @@ import { BOOKING_STATUS, CANCELLED_BY, PAYMENT_STATUS, SHIFT_TYPE } from './book
 import { emailHelper } from '../../../helpers/emailHelper';
 import { emailTemplate } from '../../../shared/emailTemplate';
 import { StripeService } from '../stripe/stripe.service';
+import { EARNING_STATUS } from '../earning/earning.interface';
 
 const SERVICE_FEE_RATE = 0.0893;
 const HOLD_DURATION_MS = 30 * 60 * 1000;
@@ -533,7 +534,7 @@ const completeBooking = async (bookingId: string, caregiverUser: JwtPayload) => 
     caregiver: booking.caregiver,
     booking: booking._id,
     amount: booking.basePrice,
-    status: 'PENDING',
+    status: EARNING_STATUS.PENDING,
   });
 
   await notifyAndEmit(

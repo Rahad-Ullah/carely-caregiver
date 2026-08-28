@@ -9,6 +9,7 @@ import { globalRateLimiter } from "./app/middlewares/rateLimiter";
 import config from "./config";
 // import { StripeController } from './app/modules/stripe/stripe.controller';
 import passport from "./config/passport";
+import { StripeController } from "./app/modules/stripe/stripe.controller";
 
 const app: Application = express();
 
@@ -34,21 +35,15 @@ app.use(
 
 // ─── Stripe Webhook ───────────────────────────────────────────────────────────
 // MUST be before express.json() — Stripe needs raw body
-// app.post(
-//   '/api/v1/stripe/webhook',
-//   express.raw({ type: 'application/json' }),
-//   StripeController.handleWebhook,
-// );
+app.post(
+  '/webhook/stripe',
+  express.raw({ type: 'application/json' }),
+  StripeController.handleWebhook,
+);
 
 // ─── Parsers ──────────────────────────────────────────────────────────────────
 app.use(cookieParser());
-app.use((req, res, next) => {
-  if (req.originalUrl.includes("/stripe/webhook")) {
-    next();
-  } else {
-    express.json()(req, res, next);
-  }
-});
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // ─── Passport ─────────────────────────────────────────────────────────────────
