@@ -1,13 +1,13 @@
 import { Types } from 'mongoose';
-import { StatusCodes }  from 'http-status-codes';
-import ApiError         from '../../../errors/ApiErrors';
+import { StatusCodes } from 'http-status-codes';
+import ApiError from '../../../errors/ApiErrors';
 import { Conversation } from './conversation.model';
-import { User }         from '../user/user.model';
+import { User } from '../user/user.model';
 import { QueryBuilder } from '../../buillder/queryBuilder';
-import { USER_ROLES }   from '../../../enums/user';
+import { USER_ROLES } from '../../../enums/user';
 
-const PARTICIPANT_FIELDS  = 'name email profileImage role';
-const LAST_MESSAGE_FIELDS = 'content contentType attachment createdAt sender';
+const PARTICIPANT_FIELDS = 'name email profileImage role';
+const LAST_MESSAGE_FIELDS = 'content contentType attachment createdAt isDeleted deliveredAt sender isRead readAt';
 
 const getOrCreateConversation = async (myId: string, receiverId: string) => {
   if (!Types.ObjectId.isValid(myId) || !Types.ObjectId.isValid(receiverId)) {
@@ -33,7 +33,7 @@ const getOrCreateConversation = async (myId: string, receiverId: string) => {
     isActive: true,
   })
     .populate('participants', PARTICIPANT_FIELDS)
-    .populate('lastMessage',  LAST_MESSAGE_FIELDS);
+    .populate('lastMessage', LAST_MESSAGE_FIELDS);
 
   if (existing) return existing;
 
@@ -43,7 +43,7 @@ const getOrCreateConversation = async (myId: string, receiverId: string) => {
 
   return Conversation.findById(created._id)
     .populate('participants', PARTICIPANT_FIELDS)
-    .populate('lastMessage',  LAST_MESSAGE_FIELDS);
+    .populate('lastMessage', LAST_MESSAGE_FIELDS);
 };
 
 const getMyInbox = async (myId: string, query: Record<string, unknown>) => {
@@ -51,14 +51,14 @@ const getMyInbox = async (myId: string, query: Record<string, unknown>) => {
 
   let finalFilter: object = {
     participants: new Types.ObjectId(myId),
-    isActive:     true,
+    isActive: true,
   };
 
   if (searchTerm) {
     const matchedUsers = await User.find({
       _id: { $ne: new Types.ObjectId(myId) },
       $or: [
-        { name:  { $regex: searchTerm, $options: 'i' } },
+        { name: { $regex: searchTerm, $options: 'i' } },
         { email: { $regex: searchTerm, $options: 'i' } },
         { phone: { $regex: searchTerm, $options: 'i' } },
       ],
@@ -87,7 +87,7 @@ const getMyInbox = async (myId: string, query: Record<string, unknown>) => {
   const qb = new QueryBuilder(
     Conversation.find(finalFilter as any)
       .populate('participants', PARTICIPANT_FIELDS)
-      .populate('lastMessage',  LAST_MESSAGE_FIELDS),
+      .populate('lastMessage', LAST_MESSAGE_FIELDS),
     cleanQuery,
   )
     .sort()
@@ -108,7 +108,7 @@ const getSingleConversation = async (conversationId: string, myId: string) => {
 
   const conversation = await Conversation.findById(conversationId)
     .populate('participants', PARTICIPANT_FIELDS)
-    .populate('lastMessage',  LAST_MESSAGE_FIELDS);
+    .populate('lastMessage', LAST_MESSAGE_FIELDS);
 
   if (!conversation) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'Conversation not found');
@@ -126,16 +126,16 @@ const getSingleConversation = async (conversationId: string, myId: string) => {
 };
 
 const searchUsersToMessage = async (
-  myId:   string,
+  myId: string,
   myRole: string,
-  query:  Record<string, unknown>,
+  query: Record<string, unknown>,
 ) => {
   const targetRole =
     myRole === USER_ROLES.CLIENT ? USER_ROLES.CAREGIVER : USER_ROLES.CLIENT;
 
   const baseFilter: object = {
-    _id:       { $ne: new Types.ObjectId(myId) },
-    role:      targetRole,
+    _id: { $ne: new Types.ObjectId(myId) },
+    role: targetRole,
     isDeleted: false,
     isBlocked: false,
   };

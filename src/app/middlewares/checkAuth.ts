@@ -21,7 +21,6 @@ export const checkAuth = (...authRoles: string[]) => async (req: Request, res: R
         const verifiedToken = await jwtHelper.verifyToken(accessToken, config.jwt.jwt_secret as string
         ) as AuthJwtPayload
 
-        console.log(verifiedToken)
         const isUserExist = await User.findOne({ email: verifiedToken.email })
 
         if (!isUserExist) {
