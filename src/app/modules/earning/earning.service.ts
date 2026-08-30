@@ -8,6 +8,7 @@ import { EARNING_STATUS } from './earning.interface';
 import { QueryBuilder } from '../../buillder/queryBuilder';
 import { emailHelper } from '../../../helpers/emailHelper';
 import { emailTemplate } from '../../../shared/emailTemplate';
+import { User } from '../user/user.model';
 
 const getWeekBounds = () => {
   const now = new Date();
@@ -51,34 +52,34 @@ const getMySummary = async (caregiverUser: JwtPayload) => {
   // Returns weekly total, 7-day bar chart breakdown, pending total, paid total and saved payout method
   const caregiverId = new Types.ObjectId(caregiverUser.id);
   const { weekStart, weekEnd } = getWeekBounds();
-const [weeklyAgg, statusAgg, profile] = await Promise.all([
-  Earning.aggregate([
-    {
-      $match: {
-        caregiver: caregiverId,
-        createdAt: { $gte: weekStart, $lte: weekEnd },
+  const [weeklyAgg, statusAgg, profile] = await Promise.all([
+    Earning.aggregate([
+      {
+        $match: {
+          caregiver: caregiverId,
+          createdAt: { $gte: weekStart, $lte: weekEnd },
+        },
       },
-    },
-    {
-      $group: {
-        _id: { $dayOfWeek: '$createdAt' },
-        total: { $sum: '$amount' },
+      {
+        $group: {
+          _id: { $dayOfWeek: '$createdAt' },
+          total: { $sum: '$amount' },
+        },
       },
-    },
-  ]),
-  Earning.aggregate([
-    { $match: { caregiver: caregiverId } },
-    {
-      $group: {
-        _id: '$status',
-        total: { $sum: '$amount' },
+    ]),
+    Earning.aggregate([
+      { $match: { caregiver: caregiverId } },
+      {
+        $group: {
+          _id: '$status',
+          total: { $sum: '$amount' },
+        },
       },
-    },
-  ]),
-  CaregiverProfile.findOne({ user: caregiverId })
-    .select('preferredPayoutMethod')
-    .lean<{ preferredPayoutMethod: string | null }>(),  // ← fix
-]);
+    ]),
+    CaregiverProfile.findOne({ user: caregiverId })
+      .select('preferredPayoutMethod')
+      .lean<{ preferredPayoutMethod: string | null }>(),  // ← fix
+  ]);
 
   // $dayOfWeek returns 1=Sun ... 7=Sat, remap to Mon=0 ... Sun=6
   const dayMap: Record<number, number> = {};
@@ -118,7 +119,7 @@ const setPayoutMethod = async (caregiverUser: JwtPayload, payoutMethod: string) 
     { new: true },
   )
     .select('preferredPayoutMethod')
-    .lean<{ preferredPayoutMethod: string | null }>();  
+    .lean<{ preferredPayoutMethod: string | null }>();
 
   if (!profile) throw new ApiError(httpStatus.NOT_FOUND, 'Caregiver profile not found');
   return { payoutMethod: profile.preferredPayoutMethod };
@@ -126,7 +127,19 @@ const setPayoutMethod = async (caregiverUser: JwtPayload, payoutMethod: string) 
 
 const getAllEarningsAdmin = async (query: Record<string, unknown>) => {
   // Admin retrieves all earnings with filter, sort, and pagination
-  const baseQuery = Earning.find()
+  const filter: Record<string, unknown> = {};
+
+  if (query.searchTerm) {
+    const matchedUsers = await User.find({
+      name: { $regex: query.searchTerm as string, $options: 'i' },
+    }).select('_id');
+
+    const matchedUserIds = matchedUsers.map((u) => u._id);
+
+    filter.user = { $in: matchedUserIds };
+  }
+
+  const baseQuery = Earning.find(filter)
     .populate('caregiver', 'name email profileImage')
     .populate({
       path: 'booking',
