@@ -19,7 +19,7 @@ const clientProfileSchema = new Schema<IClientProfile, IClientProfileModel>(
       required: true,
       unique: true,
     },
-        city: {
+    city: {
       type: String,
       trim: true,
       default: null,
@@ -45,8 +45,6 @@ const clientProfileSchema = new Schema<IClientProfile, IClientProfileModel>(
     toObject: { virtuals: true },
   }
 );
-
-clientProfileSchema.index({ user: 1 });
 
 export const ClientProfile = model<IClientProfile, IClientProfileModel>(
   'ClientProfile',

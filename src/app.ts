@@ -28,6 +28,7 @@ app.use(
       config.client_url as string,
       "http://localhost:3000",
       "http://localhost:5173",
+      "http://10.10.7.98:3000"
     ].filter(Boolean),
     credentials: true,
   }),

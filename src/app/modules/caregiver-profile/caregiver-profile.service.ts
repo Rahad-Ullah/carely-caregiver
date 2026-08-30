@@ -172,8 +172,20 @@ const getCaregiverById = async (id: string, query: { startDate?: string; endDate
 };
 
 const adminGetAllCaregivers = async (query: Record<string, unknown>) => {
+  // pre-filter user
+  const filter: Record<string, unknown> = {};
+  if (query.searchTerm) {
+    const matchedUsers = await User.find({
+      name: { $regex: query.searchTerm as string, $options: 'i' },
+    }).select('_id');
+
+    const matchedUserIds = matchedUsers.map((u) => u._id);
+
+    filter.user = { $in: matchedUserIds };
+  }
+
   const caregiverQuery = new QueryBuilder(
-    CaregiverProfile.find({})
+    CaregiverProfile.find(filter)
       .populate('user', 'name profileImage').lean(),
 
     query
