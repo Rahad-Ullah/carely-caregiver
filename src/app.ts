@@ -10,6 +10,10 @@ import config from "./config";
 // import { StripeController } from './app/modules/stripe/stripe.controller';
 import passport from "./config/passport";
 import { StripeController } from "./app/modules/stripe/stripe.controller";
+import swaggerUi from "swagger-ui-express";
+import path from "node:path";
+import fs from "node:fs";
+import YAML from "yaml";
 
 const app: Application = express();
 
@@ -28,7 +32,8 @@ app.use(
       config.client_url as string,
       "http://localhost:3000",
       "http://localhost:5173",
-      "http://10.10.7.98:3000"
+      "http://10.10.7.98:3000",
+      "http://10.10.26.188:5000"
     ].filter(Boolean),
     credentials: true,
   }),
@@ -63,6 +68,17 @@ app.get("/", (_req: Request, res: Response) => {
 
 // ─── API Routes ───────────────────────────────────────────────────────────────
 app.use("/api/v1", router);
+
+// --- Open API Docs ---
+const openApiPath = path.join(process.cwd(), "openapi.yaml");
+const openApiFile = fs.readFileSync(openApiPath, "utf8");
+const openApiDocument = YAML.parse(openApiFile);
+
+app.use(
+  "/api-docs",
+  swaggerUi.serve,
+  swaggerUi.setup(openApiDocument)
+);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────
 app.use((req: Request, res: Response) => {
