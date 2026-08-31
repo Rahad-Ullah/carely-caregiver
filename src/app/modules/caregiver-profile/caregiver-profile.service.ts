@@ -186,7 +186,7 @@ const adminGetAllCaregivers = async (query: Record<string, unknown>) => {
 
   const caregiverQuery = new QueryBuilder(
     CaregiverProfile.find(filter)
-      .populate('user', 'name profileImage').lean(),
+      .populate('user').lean(),
 
     query
   )
