@@ -18,6 +18,7 @@ import type {
   SendOtpPayload,
   VerifyUserPayload,
   ResetPasswordWithOtpPayload,
+  ChangePasswordPayload,
 } from "./auth.validation";
 
 // OTP expires in 3 minutes
@@ -145,7 +146,7 @@ const logintoDB = async (payload: LoginPayload) => {
   if (user.status === STATUS.INACTIVE) {
     throw new ApiError(StatusCodes.FORBIDDEN, "Your account is inactive");
   }
-  console.log(password)
+
   const isPasswordMatched = await bcrypt.compare(password, user.password);
   if (!isPasswordMatched) {
     throw new ApiError(StatusCodes.UNAUTHORIZED, "Incorrect password");
@@ -383,6 +384,59 @@ const resetPassword = async (payload: ResetPasswordWithOtpPayload, user: JwtPayl
   return null;
 };
 
+// change password
+const changePassword = async (payload: ChangePasswordPayload, user: JwtPayload) => {
+  const { currentPassword, newPassword, confirmPassword } = payload;
+
+  const existingUser = await User.findOne({ email: user.email, isDeleted: false }).select(
+    "+authentication +password",
+  );
+  if (!existingUser) {
+    throw new ApiError(
+      StatusCodes.NOT_FOUND,
+      "No account found with this email",
+    );
+  }
+
+  const isPasswordMatched = await bcrypt.compare(currentPassword, existingUser.password);
+  if (!isPasswordMatched) {
+    throw new ApiError(StatusCodes.UNAUTHORIZED, "Incorrect current password");
+  }
+
+  if (newPassword !== confirmPassword) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "New password and confirm password do not match",
+    );
+  }
+
+  if (newPassword === currentPassword) {
+    throw new ApiError(
+      StatusCodes.BAD_REQUEST,
+      "New password cannot be same as current password",
+    );
+  }
+
+  const hashedPassword = await bcrypt.hash(
+    newPassword,
+    Number(config.bcrypt_salt_rounds),
+  );
+
+  await User.updateOne(
+    { _id: existingUser._id },
+    {
+      $set: { password: hashedPassword },
+      $unset: {
+        "authentication.oneTimeCode": 1,
+        "authentication.expiredAt": 1,
+        "authentication.isResetPassword": 1,
+      },
+    },
+  );
+
+  return null;
+};
+
 export const AuthService = {
   registerToDB,
   logintoDB,
@@ -390,4 +444,5 @@ export const AuthService = {
   sendOtp,
   userVerify,
   resetPassword,
+  changePassword,
 };

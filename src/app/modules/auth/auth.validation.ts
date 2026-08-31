@@ -72,6 +72,21 @@ const createResetPasswordWithOtpZodSchema = z.object({
   }),
 });
 
+const createChangePasswordZodSchema = z.object({
+  body: z.object({
+    currentPassword: z
+      .string({ message: "Current password is required" })
+      .nonempty("Current password is required"),
+    newPassword: z
+      .string({ message: "New password is required" })
+      .min(8, "New password must be at least 8 characters"),
+    confirmPassword: z
+      .string({ message: "Confirm password is required" })
+      .min(8, "Confirm password must be at least 8 characters"),
+  }),
+});
+
+
 export const AuthValidation = {
   createRegisterZodSchema,
   createLoginZodSchema,
@@ -79,6 +94,7 @@ export const AuthValidation = {
   createSendOtpZodSchema,
   createVerifyUserZodSchema,
   createResetPasswordWithOtpZodSchema,
+  createChangePasswordZodSchema,
 };
 
 // Payload types
@@ -93,4 +109,7 @@ export type VerifyUserPayload = z.infer<
 >["body"];
 export type ResetPasswordWithOtpPayload = z.infer<
   typeof createResetPasswordWithOtpZodSchema
+>["body"];
+export type ChangePasswordPayload = z.infer<
+  typeof createChangePasswordZodSchema
 >["body"];

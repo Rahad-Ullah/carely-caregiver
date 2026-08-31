@@ -104,6 +104,26 @@ const resetPassword = catchAsync(async (req: Request, res: Response) => {
   });
 });
 
+// Change password (authenticated user)
+const changePassword = catchAsync(async (req: Request, res: Response) => {
+  await AuthService.changePassword(req.body, req.user);
+
+  // Clear the refresh token cookie on password change
+  res.clearCookie("refreshToken", {
+    httpOnly: true,
+    secure: config.node_env === "production",
+    sameSite: "lax",
+  });
+
+  sendResponse(res, {
+    success: true,
+    message: "Password changed successfully. Please log in again.",
+    statusCode: StatusCodes.OK,
+    data: null,
+  });
+});
+
+
 export const AuthController = {
   registerUser,
   loginUser,
@@ -112,4 +132,5 @@ export const AuthController = {
   sendOtp,
   userVerify,
   resetPassword,
+  changePassword,
 };

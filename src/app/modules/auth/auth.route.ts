@@ -51,6 +51,13 @@ router.post(
   AuthController.resetPassword,
 );
 
+router.post(
+  "/change-password",
+  checkAuth(USER_ROLES.CLIENT, USER_ROLES.CAREGIVER, USER_ROLES.ADMIN),
+  validateRequest(AuthValidation.createChangePasswordZodSchema),
+  AuthController.changePassword,
+);
+
 router.use(GoogleAuthRoutes);
 
 export const AuthRoutes = router;
