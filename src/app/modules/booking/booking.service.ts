@@ -292,6 +292,7 @@ const getCaregiverBookings = async (caregiverUser: JwtPayload, query: Record<str
   // Returns paginated incoming bookings for the authenticated caregiver
   const filter: Record<string, unknown> = {
     caregiver: new Types.ObjectId(caregiverUser.id),
+    paymentStatus: { $ne: PAYMENT_STATUS.UNPAID },
   };
 
   if (query.date) {

@@ -136,7 +136,7 @@ const getAllEarningsAdmin = async (query: Record<string, unknown>) => {
 
     const matchedUserIds = matchedUsers.map((u) => u._id);
 
-    filter.user = { $in: matchedUserIds };
+    filter.caregiver = { $in: matchedUserIds };
   }
 
   const baseQuery = Earning.find(filter)
