@@ -204,6 +204,10 @@ const adminGetAllCaregivers = async (query: Record<string, unknown>) => {
   const formattedData: any[] = data.map((profile: any) => ({
     _id: profile._id,
     user: profile.user,
+    hourlyRate: profile.hourlyRate,
+    verifiedBadge: profile.verifiedBadge,
+    averageRating: profile.averageRating,
+    totalReviews: profile.totalReviews,
     appliedOn: profile.createdAt,
   }));
 
