@@ -14,12 +14,16 @@ import swaggerUi from "swagger-ui-express";
 import path from "node:path";
 import fs from "node:fs";
 import YAML from "yaml";
+import helmet from "helmet";
 
 const app: Application = express();
 
 // ─── Logger ───────────────────────────────────────────────────────────────────
 app.use(Morgan.successHandler);
 app.use(Morgan.errorHandler);
+
+// ─── Helmet ─────────────────────────────────────────────────────────────
+app.use(helmet());
 
 // ─── Rate Limiter ─────────────────────────────────────────────────────────────
 app.use(globalRateLimiter);
