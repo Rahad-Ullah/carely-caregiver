@@ -18,6 +18,7 @@ import { emailHelper } from '../../../helpers/emailHelper';
 import { emailTemplate } from '../../../shared/emailTemplate';
 import { StripeService } from '../stripe/stripe.service';
 import { EARNING_STATUS } from '../earning/earning.interface';
+import { errorLogger } from '../../../shared/logger';
 
 const SERVICE_FEE_RATE = 0.0893;
 const HOLD_DURATION_MS = 30 * 60 * 1000;
@@ -402,8 +403,12 @@ const acceptBooking = async (bookingId: string, caregiverUser: JwtPayload) => {
   ]);
 
   const payload = await getEmailPayload(booking._id.toString());
-  emailHelper.sendEmail(emailTemplate.bookingConfirmedClient(payload));
-  emailHelper.sendEmail(emailTemplate.bookingConfirmedCaregiver(payload));
+  emailHelper.sendEmail(emailTemplate.bookingConfirmedClient(payload)).catch((err) => {
+    errorLogger.error(' Email send failed:', err);
+  });
+  emailHelper.sendEmail(emailTemplate.bookingConfirmedCaregiver(payload)).catch((err) => {
+    errorLogger.error(' Email send failed:', err);
+  });
 
   return booking;
 };
@@ -510,6 +515,11 @@ const cancelBooking = async (
     booking._id.toString(),
     BOOKING_STATUS.CANCELLED,
   );
+
+  const payload = await getEmailPayload(booking._id.toString());
+  emailHelper.sendEmail(emailTemplate.bookingCancelledClient({ ...payload, cancelReason })).catch((err) => {
+    errorLogger.error(' Email send failed:', err);
+  });
 
   return booking;
 };

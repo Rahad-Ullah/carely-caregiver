@@ -7,7 +7,15 @@ export const addShiftSchema = z.object({
     .object({
       date: z
         .string()
-        .date('date must be in YYYY-MM-DD format (UTC)'),
+        .date('date must be in YYYY-MM-DD format (UTC)')
+        .refine(
+          (data) =>
+            new Date(data).getTime() >=
+            new Date(new Date().setUTCHours(0, 0, 0, 0)).getTime(),
+          {
+            message: 'Date can not be in the past',
+          },
+        ),
 
       shiftType: shiftTypeEnum,
 

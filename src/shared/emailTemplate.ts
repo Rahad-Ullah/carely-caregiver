@@ -12,6 +12,7 @@ import {
   IDocumentRejectedTemplate,
   IPaymentReleasedTemplate,
   ISendEmail,
+  IBookingCancelledTemplate,
 } from '../types/emailTemplate';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
@@ -228,6 +229,32 @@ const bookingDeclined = (v: IBookingDeclinedTemplate): ISendEmail => ({
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+//  5. BOOKING CANCELLED → Client
+// ─────────────────────────────────────────────────────────────────────────────
+const bookingCancelledClient = (v: IBookingCancelledTemplate): ISendEmail => ({
+  to: v.clientEmail,
+  subject: `Booking Cancelled — ${v.serviceType} on ${v.bookingDate}`,
+  html: wrap(`
+    ${header('Booking Cancelled')}
+    <div style="background:white;padding:32px 28px;">
+      <p style="font-size:15px;color:#333;">Hi <strong>${v.clientName}</strong>,</p>
+      <p style="color:#555;font-size:14px;line-height:1.7;">
+        Your booking has been <strong style="color:${DANGER};">cancelled</strong>.
+      </p>
+      ${box(DANGER,
+    row('Booking ID', v.bookingId) +
+    row('Service', v.serviceType) +
+    row('Date', v.bookingDate) +
+    row('Shift', v.shift) +
+    (v.cancelReason ? row('Reason', v.cancelReason) : '')
+  )}
+      <p style="color:#555;font-size:14px;margin-top:16px;">Search for another caregiver in the Carely app.</p>
+      <p style="color:#555;margin-top:20px;">Best regards,<br/><strong style="color:${BRAND};">The Carely Team</strong></p>
+    </div>
+    ${footer()}`),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 //  6. BOOKING AUTO-RELEASED → Client (cron fires after 30-min hold)
 // ─────────────────────────────────────────────────────────────────────────────
 const bookingAutoReleased = (v: IBookingAutoReleasedTemplate): ISendEmail => ({
@@ -429,6 +456,7 @@ export const emailTemplate = {
   bookingConfirmedClient,
   bookingConfirmedCaregiver,
   bookingDeclined,
+  bookingCancelledClient,
   bookingAutoReleased,
   bookingCompletedClient,
   bookingCompletedCaregiver,
