@@ -444,6 +444,7 @@ const declineBooking = async (
     booking.slotStartTime,
   );
 
+  // full refund to client
   if (booking.paymentIntentId && booking.paymentStatus === PAYMENT_STATUS.PAID) {
     await stripe.refunds.create({ payment_intent: booking.paymentIntentId });
     booking.paymentStatus = PAYMENT_STATUS.REFUNDED;
@@ -501,8 +502,9 @@ const cancelBooking = async (
     booking.slotStartTime,
   );
 
+  // partial refund to client (90% of the booking amount)
   if (booking.paymentIntentId && booking.paymentStatus === PAYMENT_STATUS.PAID) {
-    await stripe.refunds.create({ payment_intent: booking.paymentIntentId });
+    await stripe.refunds.create({ payment_intent: booking.paymentIntentId, amount: Math.round(booking.basePrice * 0.9) });
     booking.paymentStatus = PAYMENT_STATUS.REFUNDED;
     await booking.save();
   }
