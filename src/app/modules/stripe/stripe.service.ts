@@ -8,7 +8,7 @@ import { BOOKING_STATUS, PAYMENT_STATUS } from '../booking/booking.interface';
 import { emitBookingEvent } from '../../../socket/socketHandlers';
 import config from '../../../config';
 
-const createCheckoutSession = async (bookingId: string, clientId: string) => {
+const createCheckoutSessionForBooking = async (bookingId: string, clientId: string) => {
   // Creates a Stripe Checkout Session for the booking total and attaches the Session ID to the booking
   const booking = await Booking.findById(bookingId);
   if (!booking) throw new ApiError(httpStatus.NOT_FOUND, 'Booking not found');
@@ -178,4 +178,4 @@ const getPaymentStatus = async (bookingId: string, userId: string) => {
   return { paymentStatus: booking.paymentStatus };
 };
 
-export const StripeService = { createCheckoutSession, handleWebhook, getPaymentStatus };
+export const StripeService = { createCheckoutSessionForBooking, handleWebhook, getPaymentStatus };

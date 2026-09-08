@@ -236,7 +236,7 @@ const createBooking = async (
     await session.commitTransaction();
 
     // create payment session
-    const payment = await StripeService.createCheckoutSession(
+    const payment = await StripeService.createCheckoutSessionForBooking(
       booking._id.toString(),
       clientUser.id,
     );
