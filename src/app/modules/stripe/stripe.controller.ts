@@ -5,7 +5,7 @@ import sendResponse from '../../../shared/sendResponse';
 import { StripeService } from './stripe.service';
 
 const createCheckoutSession = catchAsync(async (req: Request, res: Response) => {
-  const result = await StripeService.createCheckoutSession(req.body.bookingId, req.user.id);
+  const result = await StripeService.createCheckoutSessionForBooking(req.body.bookingId, req.user.id);
   sendResponse(res, {
     statusCode: httpStatus.CREATED,
     success: true,

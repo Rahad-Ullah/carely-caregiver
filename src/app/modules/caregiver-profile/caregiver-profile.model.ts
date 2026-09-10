@@ -20,18 +20,16 @@ const caregiverProfileSchema = new Schema<ICaregiverProfile>(
     country: { type: String, trim: true, default: 'US' },
     languages: [{ type: String, trim: true }],
     preferredPayoutMethod: { type: String, default: null },
-    verificationStatus: {
-      type: String,
-      enum: Object.values(VERIFICATION_STATUS),
-      default: VERIFICATION_STATUS.PENDING,
-    },
+    verificationAmount: { type: Number, default: 0 },
+    verificationAmountPaid: { type: Boolean, default: false },
+    verificationAmountPaidAt: { type: Date, default: null },
     isVerified: { type: Boolean, default: false },
     verifiedBadge: { type: Boolean, default: false },
     isAvailableForBooking: { type: Boolean, default: false },
     averageRating: { type: Number, default: 0, min: 0, max: 5 },
     totalReviews: { type: Number, default: 0 },
     totalBookings: { type: Number, default: 0 },
-    
+
   },
   { timestamps: true }
 );

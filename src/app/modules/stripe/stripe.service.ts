@@ -7,7 +7,9 @@ import Booking from '../booking/booking.model';
 import { BOOKING_STATUS, PAYMENT_STATUS } from '../booking/booking.interface';
 import { emitBookingEvent } from '../../../socket/socketHandlers';
 import config from '../../../config';
+import { CaregiverProfile } from '../caregiver-profile/caregiver-profile.model';
 
+// checkout for booking payment
 const createCheckoutSessionForBooking = async (bookingId: string, clientId: string) => {
   // Creates a Stripe Checkout Session for the booking total and attaches the Session ID to the booking
   const booking = await Booking.findById(bookingId);
@@ -44,6 +46,7 @@ const createCheckoutSessionForBooking = async (bookingId: string, clientId: stri
     cancel_url: config.stripe.cancel_url || `${config.client_url}/payment/cancel`,
     customer_email: client?.email || undefined,
     metadata: {
+      paymentFor: 'booking',
       bookingId: booking._id.toString(),
       clientId,
     },
@@ -56,6 +59,46 @@ const createCheckoutSessionForBooking = async (bookingId: string, clientId: stri
     checkoutUrl: session.url,
     sessionId: session.id,
     amount: booking.totalAmount,
+  };
+};
+
+// checkout for verification payment
+const createCheckoutSessionForVerification = async (userId: string, caregiverId: string) => {
+  const user = await User.findById(userId);
+  if (!user) throw new ApiError(httpStatus.NOT_FOUND, 'User not found');
+
+  const session = await stripe.checkout.sessions.create({
+    payment_method_types: ['card'],
+    line_items: [
+      {
+        price_data: {
+          currency: 'usd',
+          product_data: {
+            name: 'Verification Payment',
+            description: `Payment for verification ID: ${user._id.toString()}`,
+          },
+          unit_amount: Math.round(10 * 100),  // TODO: dynamic amount, for now static 10$
+        },
+        quantity: 1,
+      },
+    ],
+    mode: 'payment',
+    success_url: config.stripe.success_url || `${config.client_url}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: config.stripe.cancel_url || `${config.client_url}/payment/cancel`,
+    customer_email: user.email,
+    metadata: {
+      paymentFor: 'verification',
+      userId: user._id.toString(),
+      caregiverId,
+    },
+    payment_intent_data: {
+      setup_future_usage: 'off_session', // Optional: allows for one-click reordering
+    },
+  });
+
+  return {
+    checkoutUrl: session.url,
+    sessionId: session.id,
   };
 };
 
@@ -76,26 +119,45 @@ const handleWebhook = async (rawBody: Buffer, signature: string) => {
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object as Stripe.Checkout.Session;
-      const bookingId = session.metadata?.bookingId;
-      if (!bookingId) break;
+      const paymentFor = session.metadata?.paymentFor;
+      const amountPaid = (session.amount_total ?? 0) / 100;
 
-      const booking = await Booking.findById(bookingId);
-      if (!booking) break;
+      if (paymentFor === 'booking') {
+        const bookingId = session.metadata?.bookingId;
+        if (!bookingId) break;
 
-      booking.paymentStatus = PAYMENT_STATUS.PAID;
-      if (session.payment_intent) {
-        booking.paymentIntentId = session.payment_intent as string;
-      }
-      await booking.save();
+        const booking = await Booking.findById(bookingId);
+        if (!booking) break;
 
-      emitBookingEvent('booking:update', [booking.client.toString()], {
-        bookingId: booking._id.toString(),
-        status: booking.status as BOOKING_STATUS,
-        paymentStatus: PAYMENT_STATUS.PAID,
-        message: 'Payment received. Awaiting caregiver confirmation.',
-        updatedAt: new Date().toISOString(),
-      });
-      break;
+        booking.paymentStatus = PAYMENT_STATUS.PAID;
+        if (session.payment_intent) {
+          booking.paymentIntentId = session.payment_intent as string;
+        }
+        await booking.save();
+
+        emitBookingEvent('booking:update', [booking.client.toString()], {
+          bookingId: booking._id.toString(),
+          status: booking.status as BOOKING_STATUS,
+          paymentStatus: PAYMENT_STATUS.PAID,
+          message: 'Payment received. Awaiting caregiver confirmation.',
+          updatedAt: new Date().toISOString(),
+        });
+        break;
+      };
+
+      if (paymentFor === 'verification') {
+        const userId = session.metadata?.userId;
+        if (!userId) break;
+
+        const caregiver = await CaregiverProfile.findOne({ user: userId });
+        if (!caregiver) break;
+
+        caregiver.verificationAmount = amountPaid;
+        caregiver.verificationAmountPaid = true;
+        caregiver.verificationAmountPaidAt = new Date();
+        await caregiver.save();
+        break;
+      };
     }
 
     case 'payment_intent.succeeded': {
@@ -178,4 +240,4 @@ const getPaymentStatus = async (bookingId: string, userId: string) => {
   return { paymentStatus: booking.paymentStatus };
 };
 
-export const StripeService = { createCheckoutSessionForBooking, handleWebhook, getPaymentStatus };
+export const StripeService = { createCheckoutSessionForBooking, createCheckoutSessionForVerification, handleWebhook, getPaymentStatus };

@@ -6,6 +6,9 @@ import Booking from '../booking/booking.model';
 import { CaregiverDocument } from '../document/document.model';
 import { QueryBuilder } from '../../buillder/queryBuilder'; 
 import { emailHelper } from './../../../helpers/emailHelper';
+import { USER_ROLES } from '../../../enums/user';
+import { DOCUMENT_STATUS } from '../../../enums/document';
+import { BOOKING_STATUS, PAYMENT_STATUS } from '../booking/booking.interface';
 
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -13,12 +16,14 @@ const getStats = async () => {
   // Aggregates platform KPIs: total users split by role, active bookings count, pending document approval count, and cumulative platform revenue from paid bookings
   const [totalClients, totalCaregivers, activeBookings, pendingApprovals, revenueAgg] =
     await Promise.all([
-      User.countDocuments({ role: 'CLIENT', isDeleted: false }),
-      User.countDocuments({ role: 'CAREGIVER', isDeleted: false }),
-      Booking.countDocuments({ status: { $in: ['PENDING', 'CONFIRMED'] } }),
-      CaregiverDocument.countDocuments({ status: 'PENDING' }),
+      User.countDocuments({ role: USER_ROLES.CLIENT, isDeleted: false }),
+      User.countDocuments({ role: USER_ROLES.CAREGIVER, isDeleted: false }),
+      Booking.countDocuments({
+        status: { $in: [BOOKING_STATUS.PENDING, BOOKING_STATUS.CONFIRMED] },
+      }),
+      CaregiverDocument.countDocuments({ status: DOCUMENT_STATUS.PENDING }),
       Booking.aggregate([
-        { $match: { paymentStatus: 'PAID' } },
+        { $match: { paymentStatus: PAYMENT_STATUS.PAID } },
         { $group: { _id: null, total: { $sum: '$totalAmount' } } },
       ]),
     ]);
@@ -129,7 +134,7 @@ const blockUser = async (userId: string) => {
   if (!user) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
   }
-  if (user.role === 'ADMIN') {
+  if (user.role === USER_ROLES.ADMIN) {
     throw new ApiError(StatusCodes.FORBIDDEN, 'Admin accounts cannot be blocked');
   }
 
@@ -149,7 +154,7 @@ const softDeleteUser = async (userId: string) => {
   if (!user) {
     throw new ApiError(StatusCodes.NOT_FOUND, 'User not found');
   }
-  if (user.role === 'ADMIN') {
+  if (user.role === USER_ROLES.ADMIN) {
     throw new ApiError(StatusCodes.FORBIDDEN, 'Admin accounts cannot be deleted');
   }
   if (user.isDeleted) {

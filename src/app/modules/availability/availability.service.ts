@@ -2,7 +2,7 @@ import { Types } from 'mongoose';
 import { StatusCodes } from 'http-status-codes';
 import ApiError from '../../../errors/ApiErrors';
 import { Availability } from './availability.model';
-import { ISlot, IShift } from './availability.interface';
+import { ISlot, IShift, TShiftType } from './availability.interface';
 
 function generateSlots(startTime: string, endTime: string): ISlot[] {
   const [sh] = startTime.split(':').map(Number);
@@ -29,9 +29,9 @@ function toUTCMidnight(dateStr: string): Date {
 
 const addShift = async (
   caregiverId: string,
-  body: { date: string; shiftType: string; startTime: string; endTime: string },
+  payload: { date: string; shiftType: TShiftType; startTime: string; endTime: string },
 ) => {
-  const utcDate = toUTCMidnight(body.date);
+  const utcDate = toUTCMidnight(payload.date);
 
   let availability = await Availability.findOne({
     caregiver: new Types.ObjectId(caregiverId),
@@ -47,22 +47,22 @@ const addShift = async (
     }
 
     const shiftExists = availability.shifts.some(
-      (s: IShift) => s.shiftType === body.shiftType,
+      (s: IShift) => s.shiftType === payload.shiftType,
     );
     if (shiftExists) {
       throw new ApiError(
         StatusCodes.CONFLICT,
-        `A ${body.shiftType} shift already exists for this date. Update it instead.`,
+        `A ${payload.shiftType} shift already exists for this date. Update it instead.`,
       );
     }
 
     availability.shifts.push({
       _id: new Types.ObjectId(),
-      shiftType: body.shiftType as any,
-      startTime: body.startTime,
-      endTime: body.endTime,
+      shiftType: payload.shiftType,
+      startTime: payload.startTime,
+      endTime: payload.endTime,
       isAvailable: true,
-      slots: generateSlots(body.startTime, body.endTime),
+      slots: generateSlots(payload.startTime, payload.endTime),
     });
 
     await availability.save();
@@ -75,11 +75,11 @@ const addShift = async (
     shifts: [
       {
         _id: new Types.ObjectId(),
-        shiftType: body.shiftType,
-        startTime: body.startTime,
-        endTime: body.endTime,
+        shiftType: payload.shiftType,
+        startTime: payload.startTime,
+        endTime: payload.endTime,
         isAvailable: true,
-        slots: generateSlots(body.startTime, body.endTime),
+        slots: generateSlots(payload.startTime, payload.endTime),
       },
     ],
     isDayBlocked: false,

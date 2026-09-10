@@ -11,6 +11,7 @@ import { emailHelper } from '../../../helpers/emailHelper';
 import { emailTemplate } from '../../../shared/emailTemplate';
 import { getSingleFilePath, IFolderName } from "../../../shared/getFilePath"
 import unlinkFile from '../../../shared/unLinkFIle';
+import { StripeService } from '../stripe/stripe.service';
 
 const DOCUMENT_FIELD_MAP: Record<DOCUMENT_TYPE, IFolderName> = {
   [DOCUMENT_TYPE.GOVERNMENT_ID]: 'governmentId',
@@ -20,10 +21,15 @@ const DOCUMENT_FIELD_MAP: Record<DOCUMENT_TYPE, IFolderName> = {
 };
 
 const uploadDocument = async (
-  caregiverId: string,
+  caregiverUserId: string,
   documentType: DOCUMENT_TYPE,
   files: any,
 ) => {
+  const caregiver = await CaregiverProfile.findOne({ user: new Types.ObjectId(caregiverUserId) }).select('verificationAmountPaid');
+  if (!caregiver) {
+    throw new ApiError(StatusCodes.NOT_FOUND, 'Caregiver not found');
+  }
+
   // Uploads or re-uploads a caregiver document. Replaces if PENDING or REJECTED. Blocks if APPROVED.
   const fieldName = DOCUMENT_FIELD_MAP[documentType];
   const filePath = getSingleFilePath(files, fieldName);
@@ -38,7 +44,7 @@ const uploadDocument = async (
   const fileName = (files as any)[fieldName][0].originalname as string;
 
   const existing = await CaregiverDocument.findOne({
-    caregiver: new Types.ObjectId(caregiverId),
+    caregiver: new Types.ObjectId(caregiverUserId),
     documentType,
   });
 
@@ -61,12 +67,19 @@ const uploadDocument = async (
     return existing;
   }
 
-  return CaregiverDocument.create({
-    caregiver: new Types.ObjectId(caregiverId),
+  const document = await CaregiverDocument.create({
+    caregiver: new Types.ObjectId(caregiverUserId),
     documentType,
     fileUrl: filePath,
     fileName,
   });
+
+  // initiate stripe payment
+  if (!caregiver.verificationAmountPaid) {
+    return await StripeService.createCheckoutSessionForVerification(caregiverUserId, caregiver._id.toString())
+  }
+
+  return document;
 };
 
 const getMyDocuments = async (caregiverId: string) => {

@@ -12,6 +12,9 @@ export interface ICaregiverProfile extends Document {
   state: string;
   country: string;
   languages: string[];
+  verificationAmount: number;
+  verificationAmountPaid: boolean;
+  verificationAmountPaidAt: Date | null;
   verificationStatus: VERIFICATION_STATUS;
   isVerified: boolean;
   verifiedBadge: boolean;
