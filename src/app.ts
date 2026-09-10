@@ -18,6 +18,9 @@ import helmet from "helmet";
 
 const app: Application = express();
 
+// ─── Trust Proxy ───────────────────────────────────────────────────────────────────
+app.set('trust proxy', true)
+
 // ─── Logger ───────────────────────────────────────────────────────────────────
 app.use(Morgan.successHandler);
 app.use(Morgan.errorHandler);
