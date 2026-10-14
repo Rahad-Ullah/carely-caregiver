@@ -30,6 +30,11 @@ const uploadDocument = async (
     throw new ApiError(StatusCodes.NOT_FOUND, 'Caregiver not found');
   }
 
+  // initiate stripe payment if not paid
+  if (!caregiver.verificationAmountPaid) {
+    return await StripeService.createCheckoutSessionForVerification(caregiverUserId, caregiver._id.toString())
+  }
+
   // Uploads or re-uploads a caregiver document. Replaces if PENDING or REJECTED. Blocks if APPROVED.
   const fieldName = DOCUMENT_FIELD_MAP[documentType];
   const filePath = getSingleFilePath(files, fieldName);
@@ -73,11 +78,6 @@ const uploadDocument = async (
     fileUrl: filePath,
     fileName,
   });
-
-  // initiate stripe payment
-  if (!caregiver.verificationAmountPaid) {
-    return await StripeService.createCheckoutSessionForVerification(caregiverUserId, caregiver._id.toString())
-  }
 
   return document;
 };
