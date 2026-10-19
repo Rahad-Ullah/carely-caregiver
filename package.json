@@ -1,7 +1,12 @@
 {
   "name": "carely-caregiver",
-  "version": "1.0.0",
   "description": "carely-caregiver",
+  "author": {
+    "name": "Rahad Ullah",
+    "url": "https://github.com/Rahad-Ullah"
+  },
+  "license": "ISC",
+  "version": "1.0.0",
   "main": "app.ts",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
@@ -10,8 +15,6 @@
     "format": "prettier --write ",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "Lokman Sarkar",
-  "license": "ISC",
   "dependencies": {
     "@types/logform": "^1.2.0",
     "bcrypt": "^6.0.0",
