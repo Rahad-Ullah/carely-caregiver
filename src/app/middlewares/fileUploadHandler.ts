@@ -1,9 +1,11 @@
 import { Request } from 'express';
-import fs from 'fs';
 import { StatusCodes } from 'http-status-codes';
-import multer, { FileFilterCallback } from 'multer';
+import multer, { FileFilterCallback, StorageEngine } from 'multer';
 import path from 'path';
+import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import ApiError from '../../errors/ApiErrors';
+import s3Client from '../../config/aws-s3.config';
+import config from '../../config';
 
 // ── Field → folder map (must match shared/getFilePath.ts) 
 const FIELD_FOLDER_MAP: Record<string, string> = {
@@ -45,29 +47,120 @@ const FIELD_MIME_MAP: Record<string, string[]> = {
   icon:           IMAGE_MIMES,
 };
 
-const ensureDir = (dir: string) => {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-};
+class S3Storage implements StorageEngine {
+  _handleFile(
+    _req: Request,
+    file: Express.Multer.File,
+    cb: (error?: any, info?: Partial<Express.Multer.File>) => void,
+  ): void {
+    const folder = FIELD_FOLDER_MAP[file.fieldname] ?? 'misc';
+    const ext = path.extname(file.originalname).toLowerCase();
+    const filename = `${file.fieldname}-${Date.now()}${ext}`;
+    const key = `${folder}/${filename}`;
+
+    const chunks: Buffer[] = [];
+
+    file.stream.on('data', (chunk: Buffer) => {
+      chunks.push(chunk);
+    });
+
+    file.stream.on('error', (err) => {
+      cb(err);
+    });
+
+    file.stream.on('end', async () => {
+      try {
+        if ((file.stream as any).truncated) {
+          return cb(new multer.MulterError('LIMIT_FILE_SIZE', file.fieldname));
+        }
+
+        const buffer = Buffer.concat(chunks);
+        const maxSize = FIELD_SIZE_LIMIT[file.fieldname] ?? 10 * 1024 * 1024;
+        if (buffer.length > maxSize) {
+          return cb(
+            new ApiError(
+              StatusCodes.BAD_REQUEST,
+              `File size for "${file.fieldname}" exceeds allowed limit of ${maxSize / (1024 * 1024)} MB`,
+            ),
+          );
+        }
+
+        const bucket = config.aws.bucketName || process.env.S3_BUCKET_NAME;
+        if (!bucket) {
+          return cb(
+            new ApiError(
+              StatusCodes.INTERNAL_SERVER_ERROR,
+              'AWS S3 bucket name is not configured',
+            ),
+          );
+        }
+
+        const command = new PutObjectCommand({
+          Bucket: bucket,
+          Key: key,
+          Body: buffer,
+          ContentType: file.mimetype,
+        });
+
+        await s3Client.send(command);
+
+        const region = config.aws.region || process.env.AWS_REGION;
+        const location = config.media_server_url
+          ? `${config.media_server_url.replace(/\/+$/, '')}/${key}`
+          : `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
+
+        cb(null, {
+          fieldname: file.fieldname,
+          originalname: file.originalname,
+          encoding: file.encoding,
+          mimetype: file.mimetype,
+          size: buffer.length,
+          filename,
+          destination: folder,
+          path: key,
+          // S3 specific metadata
+          bucket,
+          key,
+          location,
+        } as any);
+      } catch (uploadError) {
+        cb(uploadError);
+      }
+    });
+  }
+
+  _removeFile(
+    _req: Request,
+    file: Express.Multer.File,
+    cb: (error: Error | null) => void,
+  ): void {
+    const folder = FIELD_FOLDER_MAP[file.fieldname] ?? 'misc';
+    const key =
+      (file as any).key ||
+      (file.filename ? `${folder}/${file.filename}` : undefined);
+    const bucket =
+      (file as any).bucket ||
+      config.aws.bucketName ||
+      process.env.S3_BUCKET_NAME;
+
+    if (!key || !bucket) {
+      return cb(null);
+    }
+
+    const command = new DeleteObjectCommand({
+      Bucket: bucket,
+      Key: key,
+    });
+
+    s3Client
+      .send(command)
+      .then(() => cb(null))
+      .catch((err) => cb(err));
+  }
+}
 
 const fileUploadHandler = (() => {
-  const base = path.join(process.cwd(), 'uploads');
-  ensureDir(base);
-  // Pre-create sub-folders
-  ['user', 'documents', 'attachments'].forEach((f) => ensureDir(path.join(base, f)));
-
-  const storage = multer.diskStorage({
-    destination: (_req, file, cb) => {
-      const folder = FIELD_FOLDER_MAP[file.fieldname] ?? 'misc';
-      const dest   = path.join(base, folder);
-      ensureDir(dest);
-      cb(null, dest);
-    },
-    filename: (_req, file, cb) => {
-      const ext  = path.extname(file.originalname).toLowerCase();
-      const name = `${file.fieldname}-${Date.now()}${ext}`;
-      cb(null, name);
-    },
-  });
+  const storage = new S3Storage();
 
   const fileFilter = (
     _req: Request,
